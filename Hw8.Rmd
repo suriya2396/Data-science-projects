@@ -1,0 +1,121 @@
+---
+title: "Hw8"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos=structure(c(CRAN="YOUR FAVORITE MIRROR")))
+
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("MASS")
+install.packages("glmnet")
+install.packages("caret")
+install.packages("rlang")
+
+library(caret)
+library(ggplot2)
+library(MASS)
+library(glmnet)
+library(dplyr)
+
+
+```
+
+
+
+```{r}
+crime <- read.delim("http://www.statsci.org/data/general/uscrime.txt")
+
+intercept <- lm(Crime ~ 1, data = crime) #intercept model
+stepwise <- lm(Crime ~., data = crime) #model with all predictors
+
+
+#performing stepwise regression below
+forward <- step(intercept, direction = 'forward', scope=formula(stepwise), trace = 0)
+```
+
+
+
+```{r}
+
+forward$anova #Viewing results of forward stepwise regression
+
+```
+```{r}
+forward$coefficients #Looking at coefficients of final model
+```
+ Including in the variables above in our model that had significant reduction in AIC compared to intercept only model.
+ 
+```{r}
+backward <- step(stepwise, direction = "backward", scope=formula(stepwise), trace = 0)
+
+backward$anova
+```
+ 
+ 
+ 
+```{r}
+backward$coefficients #showing coefficients of backward stepwise regression
+
+```
+
+```{r}
+#Doing both direction stepwise function
+both <- step(intercept, direction = 'both', scope = formula(stepwise), trace=0)
+
+both$anova
+```
+
+
+```{r}
+both$coefficients
+```
+
+This is final model coeffcients for Step wise regression. Using coefficients with reduction in AIC and low AIC. The coefficients above are the most significant predictors according to the stepwise regression model. 
+
+
+Now we will do Lasso Regression on the dataset.
+
+```{r}
+y <- crime %>%
+      select(Crime) %>%
+      as.matrix()
+      # Response variable
+
+
+#Defining matrix of predictor variables 
+x <- data.matrix(crime[,c('M','So','Ed', 'Po1', 'Po2', 'LF', 'M.F', 'Pop', 'NW','U1', 'U2', 'Wealth', 'Ineq', 'Prob', 'Time')])
+
+y <- scale(y,scale = TRUE)
+x <- scale(x,scale = TRUE)
+
+cv_model <- cv.glmnet(x,y, alpha = 1)
+
+lambda1 <- cv_model$lambda.min
+lambda1
+
+
+
+
+```
+This is the lambda value that minimizes the MSE.
+
+```{r}
+
+lasso <- glmnet(x, y, alpha = 1, lambda = lambda1)
+coef(lasso)
+```
+Looking at the coefficients above, you can see that some of the variables don't have coeff values since lasso reg shrunk those values to zero. This is because Lasso didn't think these variables were important enough.
+
+Now doing Elastic Net regression below.
+
+```{r}
+traincontrol <- trainControl(method = "repeatedcv", number = 5, repeats = 5, search = "random", verboseIter = TRUE)
+
+invisible(elastic <- train(Crime ~., data = cbind(y,x), method = "glmnet", preProcess = c("center", "scale"), tuneLength = 25, trControl = traincontrol, trace = 0))
+
+elastic
+```
+You can see different alpha values are used between 0 and 1 which indicates we are using the Elastic net regression. With the different alpha values we also got different R2 values so we see how accurate each Elastic net regression model fits the data. It seems it the model doesn't fit too well as the highest R2 value is 55%. 

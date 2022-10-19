@@ -1,0 +1,179 @@
+---
+title: "Hw10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+install.packages("stats")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("MASS")
+install.packages("glmnet")
+install.packages("caret")
+install.packages("rlang")
+install.packages("mice")
+
+
+library(stats)
+library(mice)
+
+library(caret)
+library(ggplot2)
+library(MASS)
+library(glmnet)
+
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(stringr)
+library(executr)
+
+library(utils)
+
+```
+
+
+
+```{r}
+cancer<-read.csv("http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/breast-cancer-wisconsin.data",header = FALSE,stringsAsFactors = FALSE)
+
+head(cancer)
+
+```
+
+
+```{r}
+
+str(cancer)
+
+
+```
+You can see no data for V7 or "Bare Nuclei"
+
+
+```{r}
+
+#This is all values with a ? in v7 column
+missing<-which(cancer$V7=='?')
+missing
+
+#This has all numerical values from all vars except values = ?
+cancer[-missing,7]
+
+
+
+```
+
+
+```{r}
+length(missing)/nrow(cancer)
+```
+Missing values are only 2% of missing data so imputation is fine.
+
+```{r}
+as.integer(cancer$V7)
+mean <- round(mean(as.integer(cancer[-missing,7]),na.rm = TRUE))
+mean
+
+
+table(cancer[-missing,7])
+
+mode <- which.max(as.numeric(table(cancer[-missing,7])))
+mode
+
+```
+So mean is rounded to 4 and mode is 1. 
+
+```{r}
+cancer[missing,7] = mean
+cancer[missing,7]
+
+
+```
+putting mean into the data set. All values with initially ? are now 4.
+
+
+Now using Regression to impute values 
+
+```{r}
+data <- read.csv("http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/breast-cancer-wisconsin.data",header = FALSE,stringsAsFactors = FALSE)
+
+#changing v7 to numeric column from character column
+data[, 7] <- sapply(data[, 7], as.numeric)
+
+
+
+#all predictor variable points except for the missing values and response
+index <- which(is.na(data$V7), arr.ind=TRUE) 
+newdata <- data[-index,2:10]
+
+
+model <- lm(V7 ~ V2+V3+V4+V5+V6+V8+V9+V10, data = newdata)
+summary(model)
+
+
+```
+
+```{r}
+
+#Using cross-validation and then using stepwise regression to leave out 
+#insignificant factors
+
+train <- trainControl(method = "cv", number = 10)
+
+model1 <- train(V7 ~., data = newdata ,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:4),
+                    trControl = train
+                    )
+
+model1$results
+
+
+
+
+```
+
+We can see from this that the model with 4 predictors has the best model based on the highest R squared value at 0.61. 
+
+
+```{r}
+
+#Predicted the is predicted values based on the stepwise regression model
+predicted <- predict(model1, newdata=cancer[index,]) 
+
+final <- data
+
+final[index,]$V7 <- as.integer(predicted)
+
+head(final)
+```
+Values imputed with regression has been done.
+Now we do the regression with perturbation.
+
+```{r}
+
+#creating 16 random positive numbers for perturbation
+
+n <- rnorm(16, mean = predicted, sd = sd(predicted))
+
+abs(n)
+
+```
+```{r}
+perturbed <- data
+perturbed[index,]$V7 <- as.integer(abs(n))
+
+head(perturbed)
+
+#This is final data with perturbed values
+```
+
+
+15.1
+
+Where optimization can be used in real life is a plant growth example where you want to optimize certain parameters to get the best plant growth. You want to optimize parameters such as water level, moisture level in soil, or moisture level in air and optimize these so plant growth is at max. Sunlight exposure is also another parameter. Too much of any of these could also be detrimental to plant growth so constraints are important for these variables. 
+
+Type of data I would need is plant growth under different conditions of moisture level in soil, amount of soil, amount of water, and sun exposure. See the growth under these varying conditions with constraints in place and see where plant growth is maxed. Contraints could be no more than 10 hours of sunlight a day cause anything more than that can be detriment to the plant growth. Another could be no more than 1 liter of water a day for the plant. Too much water can be harmful for plant growth also. 

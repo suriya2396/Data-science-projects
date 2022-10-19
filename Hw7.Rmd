@@ -1,0 +1,176 @@
+---
+title: "Hw7"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(repos=structure(c(CRAN="YOUR FAVORITE MIRROR")))
+
+install.packages("dplyr")
+install.packages("tidyverse")
+install.packages("ggplot2")
+install.packages("tree")
+install.packages("rpart")
+install.packages("randomForest")
+install.packages("pROC")
+library(pROC)
+library(rpart)
+library(tree)
+library(randomForest)
+library(ggplot2)
+
+
+```
+
+
+
+```{r}
+crime <- read.delim("http://www.statsci.org/data/general/uscrime.txt")
+
+crimetree <- tree(Crime~., data = crime)
+summary(crimetree)
+
+```
+
+
+
+```{r}
+yhat <- predict(crimetree)
+plot(yhat,crime$Crime)
+
+
+
+```
+Looking at he predicted values from regression compared to the Crime response values from dataset. 
+
+```{r}
+prune.tree(crimetree)$size
+prune.tree(crimetree)$dev
+cv.tree(crimetree)$dev
+
+```
+Doing Cross validation on tree model.
+
+
+```{r}
+prunetree <- prune.tree(crimetree, best = 4)
+yhat2 <- predict(prunetree)
+SSres <- sum((yhat2-crime$Crime)^2)
+SStot <- sum((crime$Crime - mean(crime$Crime))^2)
+r2 <- 1-(SSres/SStot)
+r2
+```
+By pruning to 4 leaves we get a decent model with a 61% accuracy rate. 
+```{r}
+prunetree1 <- prune.tree(crimetree, best = 2)
+yhat1 <- predict(prunetree1)
+SSres <- sum((yhat1-crime$Crime)^2)
+SStot <- sum((crime$Crime - mean(crime$Crime))^2)
+r2 <- 1-(SSres/SStot)
+r2
+
+
+
+```
+We see the model with 2 leaves has the accuracy way worse and this is so because the regression tree has to few leaves so there is underfitting. The model with 4 leaves has much higher accuracy.
+
+```{r}
+prunetree <- prune.tree(crimetree, best = 5)
+yhat2 <- predict(prunetree)
+SSres <- sum((yhat2-crime$Crime)^2)
+SStot <- sum((crime$Crime - mean(crime$Crime))^2)
+r2 <- 1-(SSres/SStot)
+r2
+
+```
+When we have 5 leaves we see the accuracy at 66% which shows it has the highest when compared to the other models. 
+
+```{r}
+rf <- randomForest(Crime~., data = crime)
+print(rf)
+
+```
+
+
+```{r}
+importance(rf) #Looking at the importance of each predictor
+```
+```{r}
+fit4 <- randomForest(Crime~., data = crime, mtry = 4, importance = TRUE)
+fit4
+```
+```{r}
+yhatrf <- predict(fit4)
+SS <- sum((yhatrf - crime$Crime)^2)
+SStot <- sum((crime$Crime - mean(crime$Crime))^2)
+
+r2 <- 1 - (SS/SStot)
+r2
+
+```
+
+
+```{r}
+fit2 <- randomForest(Crime~., data = crime, mtry = 2, importance = TRUE)
+yhatrf <- predict(fit2)
+SS <- sum((yhatrf - crime$Crime)^2)
+SStot <- sum((crime$Crime - mean(crime$Crime))^2)
+
+r2 <- 1 - (SS/SStot)
+r2
+```
+We can see with 2 predictors the Random Forest model has a higher accuracy compared to the model with 4 predictors. 4 may be too many predictors and can cause some overfitting.
+
+
+10.2
+Medical researches want to know how exercise and weight impact prob of heart attack. Logistic regression can be performed to understand relationship. Binary response values would be patient has heart attack and doesn't have heart attack. 
+Predictors can include exercise and weight.
+
+10.3
+```{r}
+
+german <- read.table("german.txt", sep = " ")
+head(german)
+
+
+```
+
+```{r}
+german$V21[german$V21==1]<-0 #making response variables binary, 0 and 1
+german$V21[german$V21==2]<-1
+
+#Creating train and test set
+german_train <- german[1:800,]
+german_test <- german[801:1000,]
+
+#creating logistic regression model
+germanmodel = glm(V21~., 
+                  family=binomial(link = "logit"),
+                  data = german_train)
+
+
+summary(germanmodel)
+
+
+
+```
+
+
+```{r}
+yhat <- predict(germanmodel,german_test, type = "response")
+
+yhat
+
+
+```
+
+```{r}
+
+#Looking at threshold prob. values. 0.5 is threshold value
+thresh <- 0.5
+yhat_threshold <- as.integer(yhat > thresh)
+conf_matrix <- as.matrix(table(yhat_threshold,german_test$V21))
+conf_matrix
+```
+
