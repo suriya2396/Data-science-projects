@@ -1,0 +1,177 @@
+---
+title: "Hw10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+install.packages("stats")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("MASS")
+install.packages("glmnet")
+install.packages("caret")
+install.packages("rlang")
+install.packages("mice")
+
+
+library(stats)
+library(mice)
+
+library(caret)
+library(ggplot2)
+library(MASS)
+library(glmnet)
+
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(stringr)
+library(executr)
+
+library(utils)
+
+```
+
+In this analysis we will explore mean/mode imputation to impute for missing values, and then use regression on those imputed values for the missing data. 
+
+
+```{r}
+cancer<-read.csv("http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/breast-cancer-wisconsin.data",header = FALSE,stringsAsFactors = FALSE)
+
+head(cancer)
+
+```
+
+
+```{r}
+
+str(cancer)
+
+
+```
+You can see no data for V7 or "Bare Nuclei". That is missing from the dataset.
+
+
+```{r}
+
+#This is all values with a ? in v7 column
+missing<-which(cancer$V7=='?')
+missing
+
+#This has all numerical values from all vars except values = ?
+cancer[-missing,7]
+
+
+
+```
+
+
+```{r}
+length(missing)/nrow(cancer)
+```
+Missing values are only 2% of missing data so imputation is fine. Generally want missing values to be less than 5% of data in order to do imputation. We are using mean/mode imputation where we substitute missing values with mean and mode.
+
+```{r}
+as.integer(cancer$V7)
+mean <- round(mean(as.integer(cancer[-missing,7]),na.rm = TRUE))
+mean
+
+
+table(cancer[-missing,7])
+
+mode <- which.max(as.numeric(table(cancer[-missing,7])))
+mode
+
+```
+So mean is rounded to 4 and mode is 1. 
+
+```{r}
+cancer[missing,7] = mean
+cancer[missing,7]
+
+
+```
+putting mean into the data set. All values with initially ? are now 4.
+
+
+Now using Regression including the imputed values.
+
+```{r}
+data <- read.csv("http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/breast-cancer-wisconsin.data",header = FALSE,stringsAsFactors = FALSE)
+
+#changing v7 to numeric column from character column
+data[, 7] <- sapply(data[, 7], as.numeric)
+
+
+
+#all variables are predictors except for the missing values (imputed column) and response
+index <- which(is.na(data$V7), arr.ind=TRUE) 
+newdata <- data[-index,2:10]
+
+
+model <- lm(V7 ~ V2+V3+V4+V5+V6+V8+V9+V10, data = newdata)
+summary(model)
+
+
+```
+
+Using stepwise regression below to fine tune the model to reduce the number of predictor variables so I can get a more accurate model. Drawbacks are that it is a greedy algorithm and for predictor variables that change in weight quickly this method won't produce the best solution. Testing out stepwise regression to see how accurate a model I can get.
+```{r}
+
+#Using cross-validation and then using step wise regression to leave out 
+#insignificant factors
+
+train <- trainControl(method = "cv", number = 10)
+
+model1 <- train(V7 ~., data = newdata ,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:4),
+                    trControl = train
+                    )
+
+model1$results
+
+
+
+
+```
+
+We can see from this that the model with 4 predictors has the best model based on the highest R squared value at 0.61. 
+
+
+```{r}
+
+#Predicting values based on the stepwise regression model
+predicted <- predict(model1, newdata=cancer[index,]) 
+
+final <- data
+
+final[index,]$V7 <- as.integer(predicted)
+
+head(final)
+```
+Values imputed with regression has been done.
+Now we do the regression with perturbation.
+
+```{r}
+
+#creating 16 random positive numbers for perturbation
+
+n <- rnorm(16, mean = predicted, sd = sd(predicted))
+
+abs(n)
+
+```
+```{r}
+perturbed <- data
+perturbed[index,]$V7 <- as.integer(abs(n))
+
+head(perturbed)
+
+#This is final data with perturbed values
+```
+
+
+This is the final data set we get with regression plus the imputation method. We have filled out the values using imputation. Using step wise regression we were able to eliminate insignificant predictors and use cross validation to reduce bias in the data by making sure the data is resampled and that significant data is not just seen in training or test data. 
